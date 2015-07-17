@@ -1,0 +1,12 @@
+Neutron generator slow control software
+
+NG_slowcontrol.py is the best version, rewritten in July 2015.
+The old c script (slowcontrolops.c) had one too many features bolted on, whih caused it to overwrite a significant amount of data.
+
+Operation:
+The python script captures a small portion of the control interface window (the bit containing the slow control info).
+It then selects the three bits that hold the numbers we want (temperature, voltage, current) and runs them through an ocr program.
+These values are output (with unix timestamp) to SlowControl/NG_SC.txt
+If the generator is running (both current and voltage nonzero), it runs with a period set by the minor_period variable for the time specified by the major_period variable.
+If the generator is off (either current or voltage are zero) it returns.
+For uninterrupted operation, set the script to run in cron with a period matching the major_period variable.
