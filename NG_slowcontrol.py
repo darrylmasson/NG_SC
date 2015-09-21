@@ -39,6 +39,7 @@ def Backlog(start, end = 2147483647L): # Not finished?
 	this = 0L
 	while this < start:
 		line = sc_file.readline()
+		if line == '': return # end of file
 		this = long(line[:10])
 	sc_file.seek(-len(line),1)
 	while this <= end:
