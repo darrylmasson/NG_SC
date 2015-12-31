@@ -5,9 +5,10 @@
 
 #include <iostream>
 #include <fstream>
-#include <stdlib>
+#include <cstdlib>
 #include <unistd.h>
 #include <ctime>
+#include "pstream.h"
 
 #include "TFile.h"
 #include "TTree.h"
@@ -24,25 +25,34 @@ long unix_ts() {
 	return time(0);
 }
 
-void Parse(long timestamp, double values[]) {
+int Parse(long timestamp, double values[]) {
 	string tmp, crops[] = {"31x15+79+35 ","42x16+5+188 ","42x16+6+358 "}, outputs[] = {"/temp","/hv","/current"};
+	redi::ipstream redirect;
+	int ret(0);
 	for (auto i = 0; i < 3; i++) {
-		system(("convert " + storage_dir + to_string(timestamp) + ".pgm -crop " + crops[i] + root_dir + outputs[i] + ".pgm").c_str());
-		tmp = system(("gocr -i " + root_dir + outputs[i] + ".pgm").c_str());
+		ret = system(("convert " + storage_dir + to_string(timestamp) + ".pgm -crop " + crops[i] + root_dir + outputs[i] + ".pgm").c_str());
+		if (ret != 0) return 1;
+		redirect.open("gocr -i " + root_dir + outputs[i] + ".pgm"); // not sure how to capture return value
+		redirect >> tmp;
+		redirect.close();
 		for (auto it = tmp.begin(); it < tmp.end(); it++) if ((*it == 'o') || (*it == 'O')) *it = '0';
 		values[i] = stof(tmp);
 	}
-	system("rm " + root_dir + "*.pgm");
+	system(("rm " + root_dir + "*.pgm").c_str());
+	return 0;
 }
 
-void Capture(long timestamp) {
-//	WINID = `xwininfo -display :0.0 -all -root |egrep "\":" |grep Inbox |awk '{print $1}'`
+int Capture(long timestamp) {
+	int ret = 0;
+//	WINID = `xwininfo -display :0.0 -all -root |egrep "\":" |grep Remote\ Desktop\ Viewer |awk '{print $1}'` \\ old method
 //	xwd -out blah.xwd -root -display :0.0 -id $WINID
-	system(("xwd -out " + root_dir + "blah.xwd -root -display :0.0 -name XXX").c_str()); // TODO add VNC client name
-//	if (ret != 0) return -1;
+	ret = system(("xwd -out " + root_dir + "blah.xwd -root -display :0.0 -name Remote\\ Desktop\\ Viewer").c_str()); // 0 == success, 256 == failure
+	if (ret != 0) return 1;
 //	convert blah.xwd -crop XXX timestamp.pgm
-	system(("convert " + root_dir + "blah.xwd -crop 127x420+900+245 " + ts_dir + to_string(timestamp) + ".pgm").c_str());
+	ret = system(("convert " + root_dir + "blah.xwd -crop 127x420+900+245 " + storage_dir + to_string(timestamp) + ".pgm").c_str()); // same
+	if (ret != 0) return 2;
 	system(("rm " + root_dir + "blah.xwd").c_str());
+	return 0;
 }
 
 void AtExit() {
@@ -54,13 +64,14 @@ int main(int argc, char** argv) {
 	atexit(AtExit);
 	Long64_t TS = unix_ts();
 	long now = TS;
+	int ret(0);
 	if (f.IsZombie()) {
 		f_log << now << " could not open root file\n";
 		return 0;
 	}
 	if (argc != 3) {
 		f_log << now << " incorrect arguments: ";
-		for (auto i = 0; i < argc; i++) f_log << arg[i] << " "; f_log << '\n';
+		for (auto i = 0; i < argc; i++) f_log << argv[i] << " "; f_log << '\n';
 		cout << "Usage: ./NG_slowcontrol <major period> <minor period>\n";
 		cout << "See documentation\n";
 		return 0;
@@ -69,17 +80,25 @@ int main(int argc, char** argv) {
 	int minor = atoi(argv[2]);
 	TTree* t = (TTree*)f.Get("TSC");
 	double values[3]; // temperature, HV, current
-	t->SetBranchAddress("Unix_ts",&TS,"ts\L");
-	t->SetBranchAddress("NG_temp",&values[0],"temp\D");
-	t->SetBranchAddress("NG_HV",&values[1], "hv\D");
-	t->SetBranchAddress("NG_current",&values[2], "current\D");
-	for (i = 0; i < major*60/minor; i++) {
-		Capture(now);
-		Parse(now, values);
+	t->SetBranchAddress("Unix_ts",&TS);
+	t->SetBranchAddress("NG_temp",&values[0]);
+	t->SetBranchAddress("NG_HV",&values[1]);
+	t->SetBranchAddress("NG_current",&values[2]);
+	for (auto i = 0; i < major*60/minor; i++) {
+		ret = Capture(now);
+		if (ret) {
+			f_log << now << (ret == 1 ? " capture " : " convert ") << "failed\n";
+			break;
+		}
+		ret = Parse(now, values);
+		if (ret) {
+			f_log << now << " parsing failed\n";
+			break;
+		}
 		t->Fill();
-		t->Write("",TObject::kOverwrite);
-		if ((values[1] == 0) || (values[2] == 0)) return 0; // HV or current == 0 mean generator is off, no need to keep running
+		if ((values[1] == 0) || (values[2] == 0)) break; // HV or current == 0 mean generator is off, no need to keep running
 		sleep(minor);
 	}
+	t->Write("",TObject::kOverwrite);
 	return 0;
 }
