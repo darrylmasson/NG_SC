@@ -1,8 +1,8 @@
 Neutron generator slow control monitoring software
 
-NG_slowcontrol.cpp is the best version, rewritten in December 2015. NG_slowcontrol.py is an equivalent python version without the ROOT interface
+NG_slowcontrol.py is the best version. NG_slowcontrol.cpp is an equivalent c++ version with a ROOT interface
 
 Operation:
-The script captures a small portion of the control interface window (the bit containing the slow control info). It then selects the three bits that hold the numbers we want (temperature, voltage, and current) and runs them through an ocr program. These values are output (with unix timestamp) to the TSC tree in SlowControl/NG_SC.root (ascii text file for python version) If the generator is running (both current and voltage nonzero), it runs with a period set by the minor_period variable (in seconds) for the time specified by the major_period variable (in minutes). If the generator is off (either current or voltage are zero) it returns. For uninterrupted operation, set the script to run in cron with a period matching the major_period variable.
+The script captures a small portion of the control interface window (the bit containing the slow control info). It then selects the three bits that hold the numbers we want (temperature, voltage, and current) and runs them through an ocr program. These values are output (with unix timestamp) to a text file (the a TTree for c++ version). If the generator is running (both current and voltage nonzero), it runs with a period set by the minor_period variable (in seconds) for the time specified by the major_period variable (in minutes). If the generator is off (either current or voltage are zero) it returns. For uninterrupted operation, set the script to run in cron with a period matching the major_period variable.
 
-The images captured are stored in images/NG_SC_data.tar, which is rsync'd to the flash drive as a backup.
+The images captured are stored in images/images.tar, which is rsync'd to a second location as a backup.

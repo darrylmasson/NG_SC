@@ -1,3 +1,4 @@
+#! /usr/bin/python
 # Neutron generator slow control
 
 import os
@@ -5,6 +6,10 @@ import time
 
 root_dir = r"/home/darkmatters/"
 ts_dir = root_dir + r"SlowControl/Images/"
+backup_name = root_dir + r"Backup/NG_SC_data.tar"
+archive_name = ts_dir + r"NG_SC_data.tar"
+minor_period = 10 # seconds between captures
+major_period = 5 # minutes, same value as in the crontab
 
 def unix_ts(): return int(time.time())
 
@@ -20,18 +25,23 @@ def Parse(timestamp):
 	ret[0] = float(temp.replace('O','0'))
 	ret[1] = float(hv.replace('O','0'))
 	ret[2] = float(current.replace('O','0'))
-	cleanup = os.system("rm " + root_dir + r"*.pgm")
+	cleanup = os.system("rm -f " + root_dir + r"*.pgm")
 	return ret
 
 def Capture(timestamp):
 #	WINID = `xwininfo -display :0.0 -all -root |egrep "\":" |grep Inbox |awk '{print $1}'`
 #	xwd -out blah.xwd -root -display :0.0 -id $WINID
-	output = os.system("xwd -out " + root_dir + r"blah.xwd -root -display :0.0 -name XXX") # TODO add VNC client name
-	if output != 0:
+	output = os.system("xwd -out " + root_dir + r"blah.xwd -root -display :0.0 -name Remote\ Desktop\ Viewer") # TODO correct VNC client name?
+	if output != 0: # 0 = success, 256 = failure
 		return -1
 #	convert blah.xwd -crop XXX timestamp.pgm
 	crop = os.system("convert " + root_dir + r"blah.xwd -crop 127x420+900+245 " + ts_dir + str(timestamp) + r".pgm")
-	rm = os.system("rm " + root_dir + r"blah.xwd")
+	rm = os.system("rm -f " + root_dir + r"blah.xwd")
+	return 0
+
+def Backup(timestamp):
+	os.system("tar --append --file " + archive_name + " " + ts_dir + str(timestamp) + ".pgm")
+	os.system("rsync --archive --compress " + archive_name + " " + backup_name)
 	return 0
 
 def Backlog(start, end = 2147483647L): # Not finished?
@@ -55,8 +65,6 @@ def Backlog(start, end = 2147483647L): # Not finished?
 #-------------# main #-------------#
 #----------------------------------#
 
-minor_period = 10 # seconds between captures
-major_period = 5 # minutes, same value as in the crontab
 with open(root_dir + "SlowControl/NG_SC.txt",'a') as sc_file:
 	for i in range(major_period*60/minor_period):
 		now = unit_ts()
@@ -66,6 +74,7 @@ with open(root_dir + "SlowControl/NG_SC.txt",'a') as sc_file:
 			break
 		sc = Parse(now)
 		sc_file.write(str(now) + " " + str(sc[0]) + " " + str(sc[1]) + " " + str(sc[2]) + '\n')
+		err = Backup(now)
 		if sc[1] == 0.0 or sc[2] == 0.0: break # generator is off, no need to keep running
 		time.sleep(minor_period)
 	sc_file.close()
