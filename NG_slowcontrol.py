@@ -25,16 +25,18 @@ def Parse(timestamp):
 	ret[0] = float(temp.replace('O','0'))
 	ret[1] = float(hv.replace('O','0'))
 	ret[2] = float(current.replace('O','0'))
-	cleanup = os.system("rm -f " + root_dir + r"*.pgm")
+	cleanup = os.system("rm -f " + root_dir + r"temp.pgm hv.pgm current.pgm")
 	return ret
 
-def Capture(timestamp):
+#	Old shell way of doing this:
 #	WINID = `xwininfo -display :0.0 -all -root |egrep "\":" |grep Inbox |awk '{print $1}'`
 #	xwd -out blah.xwd -root -display :0.0 -id $WINID
+#	convert blah.xwd -crop XXX timestamp.pgm
+
+def Capture(timestamp):
 	output = os.system("xwd -out " + root_dir + r"blah.xwd -root -display :0.0 -name Remote\ Desktop\ Viewer") # TODO correct VNC client name?
 	if output != 0: # 0 = success, 256 = failure
 		return -1
-#	convert blah.xwd -crop XXX timestamp.pgm
 	crop = os.system("convert " + root_dir + r"blah.xwd -crop 127x420+900+245 " + ts_dir + str(timestamp) + r".pgm")
 	rm = os.system("rm -f " + root_dir + r"blah.xwd")
 	return 0
